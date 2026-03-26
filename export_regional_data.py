@@ -3,14 +3,12 @@ import math
 import duckdb
 import pandas as pd
 
-# 接收 GitHub Actions 传来的参数
 parser = argparse.ArgumentParser(description="导出区域内的运动数据")
 parser.add_argument('--lat', type=float, required=True, help="中心点纬度")
 parser.add_argument('--lon', type=float, required=True, help="中心点经度")
 parser.add_argument('--distance', type=int, required=True, help="范围(米)")
 args = parser.parse_args()
 
-# --- 轨迹解密函数 ---
 def decode_polyline(polyline_str):
     if not polyline_str: return []
     index, lat, lng = 0, 0, 0
@@ -32,7 +30,6 @@ def decode_polyline(polyline_str):
         coordinates.append([lng / 100000.0, lat / 100000.0])
     return coordinates
 
-# --- 大圆距离计算 ---
 def haversine(lon1, lat1, lon2, lat2):
     R = 6371000
     phi1, phi2 = math.radians(lat1), math.radians(lat2)
@@ -42,9 +39,10 @@ def haversine(lon1, lat1, lon2, lat2):
 
 print(f"🔍 正在检索以 [{args.lat}, {args.lon}] 为中心，{args.distance}米为半径的运动数据...")
 
+# 💥 已经修复：将 total_elevation_gain 改为 elevation_gain 💥
 sql = """
 SELECT 
-    summary_polyline, type, distance, moving_time, average_heartrate, total_elevation_gain 
+    summary_polyline, type, distance, moving_time, average_heartrate, elevation_gain 
 FROM read_parquet('data.parquet') 
 WHERE summary_polyline IS NOT NULL
 """
@@ -58,7 +56,6 @@ with duckdb.connect() as conn:
 
 filtered_data = []
 
-# 遍历所有数据，利用地理围栏筛选
 for row in raw_rows:
     poly_str, m_type, dist_m, time_s, avg_hr, elev_g = row
     decoded_points = decode_polyline(poly_str)
@@ -72,7 +69,6 @@ for row in raw_rows:
             break
             
     if in_region:
-        # 清理 None 数据，保证表格干净
         filtered_data.append({
             '运动类型 (Type)': m_type,
             '距离-米 (Distance)': round(float(dist_m if dist_m else 0), 2),
@@ -81,7 +77,6 @@ for row in raw_rows:
             '海拔爬升-米 (Elevation)': round(float(elev_g if elev_g else 0), 2)
         })
 
-# 使用 pandas 导出为 CSV，带 BOM 的 UTF-8 防止 Excel 打开乱码
 df = pd.DataFrame(filtered_data)
 csv_filename = "regional_sports_data.csv"
 df.to_csv(csv_filename, index=False, encoding='utf-8-sig')
