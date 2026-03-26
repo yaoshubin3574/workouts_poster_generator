@@ -61,14 +61,13 @@ def haversine(lon1, lat1, lon2, lat2):
 
 print(f"步骤 1/3：正在生成 {args.distance}m 范围的基础地图...")
 
-# 💥 彻底将原生标题和副标题置空，防止干扰 💥
 result = generate_poster(
     PosterRequest(
         output=Path("./base-map"),
         formats=("svg",), 
         lat=args.lat,  
         lon=args.lon, 
-        title="",        
+        title="",        # 强制置空，由后续代码接管排版
         subtitle="",     
         theme="dark",   
         width_cm=21,
@@ -179,27 +178,54 @@ with open(result.files[0], 'r', encoding='utf-8') as f:
     svg_content = f.read()
 
 # ==========================================
-# 💥 1. 彻底净化底层：一键抹除所有原生文字和线条 💥
+# 💥 1. 强制灰度化：将底层所有的黄/棕色道路全部转为深灰色 💥
+# ==========================================
+def color_to_gray(match):
+    val = match.group(1)
+    try:
+        if len(val) == 3:
+            r, g, b = int(val[0], 16)*17, int(val[1], 16)*17, int(val[2], 16)*17
+        else:
+            r, g, b = int(val[0:2], 16), int(val[2:4], 16), int(val[4:6], 16)
+        # 计算亮度，并微微压暗 (0.7) 保证其作为背景的静谧感
+        lum = int((0.299 * r + 0.587 * g + 0.114 * b) * 0.7)
+        return f'#{lum:02x}{lum:02x}{lum:02x}'
+    except:
+        return f'#{val}'
+
+def rgb_to_gray(match):
+    try:
+        r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        lum = int((0.299 * r + 0.587 * g + 0.114 * b) * 0.7)
+        return f'rgb({lum},{lum},{lum})'
+    except:
+        return match.group(0)
+
+# 正则替换底层里的所有色值
+svg_content = re.sub(r'#([a-fA-F0-9]{6}|[a-fA-F0-9]{3})\b', color_to_gray, svg_content)
+svg_content = re.sub(r'rgb\((\d+),\s*(\d+),\s*(\d+)\)', rgb_to_gray, svg_content)
+
+# ==========================================
+# 💥 2. 彻底净化底层：一键抹除所有原生文字和线条 💥
 # ==========================================
 svg_content = re.sub(r'<text\b.*?</text>', '', svg_content, flags=re.IGNORECASE | re.DOTALL)
 svg_content = re.sub(r'<line\b.*?>', '', svg_content, flags=re.IGNORECASE | re.DOTALL)
 
 # ==========================================
-# 💥 2. 构建自定义图层序列 💥
+# 💥 3. 构建自定义图层序列 💥
 # ==========================================
-# 2.1 暗色玻璃滤镜
+# 3.1 暗黑玻璃滤镜
 dark_glass = '<rect width="100%" height="100%" fill="#050505" opacity="0.5" />\n'
 
-# 2.2 绝对定位的城市标题 (左上角)
+# 3.2 绝对定位的城市标题 (左上角留白)
 city_title_block = f'<text x="{width_px * 0.08:.1f}" y="{height_px * 0.08:.1f}" font-family="Arial, Helvetica, sans-serif" font-size="{width_px * 0.05:.1f}" font-weight="bold" fill="#f0f0f0" letter-spacing="8">{args.city.upper()}</text>\n'
 
-# 2.3 数据大看板 (无图标、1.5倍大字号、精简间距、强制空格)
-# 运用 xml:space="preserve" 完美保证数字和单位之间的空格不会被 SVG 吞掉
+# 3.3 数据大看板 (无图标、1.5倍大字号、精简间距、强制保留空格)
 stats_y_pos = height_px * 0.78
 stats_block = (
     f'<g id="stats_block" transform="translate({width_px/2:.1f}, {stats_y_pos:.1f})" fill="#f0f0f0" font-family="Arial, Helvetica, sans-serif" font-size="60" text-anchor="middle">\n'
     
-    # --- 第一行: Runs, Rides, Hikes (间距缩小为 380) ---
+    # --- 第一行: Runs, Rides, Hikes ---
     f'  <g transform="translate(-380, 0)">\n'
     f'    <text>\n'
     f'      <tspan font-weight="bold">{run_count}</tspan><tspan xml:space="preserve"> Runs</tspan>\n'
@@ -221,7 +247,7 @@ stats_block = (
     f'    </text>\n'
     f'  </g>\n'
 
-    # --- 第二行: BPM, Elev (居中平衡，去除 Walks) ---
+    # --- 第二行: BPM, Elev ---
     f'  <g transform="translate(-190, 200)">\n'
     f'    <text>\n'
     f'      <tspan font-weight="bold">{int(total_avg_hr)}</tspan><tspan xml:space="preserve"> BPM</tspan>\n'
@@ -236,7 +262,7 @@ stats_block = (
     f'    </text>\n'
     f'  </g>\n'
 
-    # --- 第三行: Total 汇总 (加入 / 符号前后的空格) ---
+    # --- 第三行: Total 汇总 ---
     f'  <g transform="translate(0, 400)">\n'
     f'    <text>\n'
     f'      <tspan font-weight="bold">{total_count}</tspan><tspan xml:space="preserve"> Workouts Total </tspan><tspan font-weight="bold">{total_dist_km:.1f}</tspan><tspan xml:space="preserve"> km / </tspan><tspan font-weight="bold">{total_time_h}</tspan><tspan xml:space="preserve"> h </tspan><tspan font-weight="bold">{total_time_m}</tspan><tspan xml:space="preserve"> min</tspan>\n'
@@ -245,7 +271,7 @@ stats_block = (
     f'</g>\n'
 )
 
-# 组合所有新图层并一次性注入 SVG
+# 组合所有新图层并一次性注入 SVG (注意：我们的高亮元素都在最顶层，不会被灰度化)
 final_injection = [
     dark_glass,
     "\n".join(svg_injection_lines),
