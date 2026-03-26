@@ -77,4 +77,4 @@ jobs:
           colorful-map.svg
           colorful-map.png
           regional_sports_data.csv
-        retention-days: 7
+        retention-days: 1
