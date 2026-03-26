@@ -63,7 +63,7 @@ result = generate_poster(
         subtitle=args.province,
         theme="dark",   
         width_cm=21,
-        height_cm=33, # 拉长海报以容纳底部数据面板
+        height_cm=33, 
         distance_m=args.distance, 
         include_buildings=True,
     )
@@ -77,7 +77,6 @@ height_px = result.size.height
 projector = MercatorProjector.from_bounds(poster_bounds, width_px, height_px)
 project_func = getattr(projector, 'project', getattr(projector, 'lat_lon_to_pixel', getattr(projector, 'lon_lat_to_pixel', None)))
 
-# 💥 修正点：使用 elevation_gain 替代 total_elevation_gain 💥
 sql = """
 SELECT 
     summary_polyline, type, distance, moving_time, average_heartrate, elevation_gain 
@@ -89,7 +88,6 @@ with duckdb.connect() as conn:
     try:
         raw_rows = conn.execute(sql).fetchall()
         clean_rows = []
-        # 清洗数据，防止出现 None 导致计算崩溃
         for r in raw_rows:
             clean_rows.append((
                 r[0], r[1],
@@ -229,7 +227,37 @@ def tweak_prov(match):
 svg_content = re.sub(rf'<text\b[^>]*>{args.province}</text>', tweak_prov, svg_content)
 svg_content = re.sub(r'<line\b[^>]*>', lambda m: add_translate(m.group(0)), svg_content)
 
-# 图标路径
-sigma_icon = '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15.5h-2v-2h2v2zm0-4.5h-2v-2h2v2zm0-4.5h-2v-2h2v2zm0-4.5h-2v-2h2v2zm2-2.5h-4v-2h4v2zm2 2.5h-2v-2h2v2z" fill="#f0f0f0"/>'
-run_icon = '<path d="M12.5,21.5L10.5,19.5L10.5,14.5L12.5,12.5L14.5,14.5L14.5,19.5L12.5,21.5z M13,22.5L12,21.5L13,20.5L14,21.5L13,22.5z M12,11.5L10,9.5L10,4.5L12,2.5L14,4.5L14,9.5L12,11.5z M12.5,10.5L11.5,9.5L11.5,4.5L12.5,3.5L13.5,4.5L13.5,9.5L12.5,10.5z M16.5,13.5L14.5,11.5L14.5,6.5L16.5,4.5L18.5,6.5L18.5,11.5L16.5,13.5z M17,14.5L16,13.5L17,12.5L18,13.5L17,14.5z" fill="#FC4C02"/>'
-ride_icon = '<path d="M15.5 2.5a.5.5 0 01.5-.5h2a.5.5 0 010 1h-2a.5.5 0 01-.5-.5zM12.5 1.5a.5.5 0 01.5-.5h1.5a.5.5 0 010 1H13a.5.5 0 01-.5-.5zM19.5 4a.5.5 0 01-.5-.5v-.5a.5.5 0 011 0v.5a.5.5 0 01-.5.5zM18.5 7a.5.5 0 01-.5-.5v-1a.5.5 0 011 0v1a.5.5 0 01-.5.5zM16.5 11.5c.343.343.343.899 0 1.242a.5.5 0 010-.707
+# 💥 核心修复：全部改用三引号，彻底免疫网页断行报错 💥
+sigma_icon = """<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15.5h-2v-2h2v2zm0-4.5h-2v-2h2v2zm0-4.5h-2v-2h2v2zm0-4.5h-2v-2h2v2zm2-2.5h-4v-2h4v2zm2 2.5h-2v-2h2v2z" fill="#f0f0f0"/>"""
+run_icon = """<path d="M12.5,21.5L10.5,19.5L10.5,14.5L12.5,12.5L14.5,14.5L14.5,19.5L12.5,21.5z M13,22.5L12,21.5L13,20.5L14,21.5L13,22.5z M12,11.5L10,9.5L10,4.5L12,2.5L14,4.5L14,9.5L12,11.5z M12.5,10.5L11.5,9.5L11.5,4.5L12.5,3.5L13.5,4.5L13.5,9.5L12.5,10.5z M16.5,13.5L14.5,11.5L14.5,6.5L16.5,4.5L18.5,6.5L18.5,11.5L16.5,13.5z M17,14.5L16,13.5L17,12.5L18,13.5L17,14.5z" fill="#FC4C02"/>"""
+ride_icon = """<path d="M15.5 2.5a.5.5 0 01.5-.5h2a.5.5 0 010 1h-2a.5.5 0 01-.5-.5zM12.5 1.5a.5.5 0 01.5-.5h1.5a.5.5 0 010 1H13a.5.5 0 01-.5-.5zM19.5 4a.5.5 0 01-.5-.5v-.5a.5.5 0 011 0v.5a.5.5 0 01-.5.5zM18.5 7a.5.5 0 01-.5-.5v-1a.5.5 0 011 0v1a.5.5 0 01-.5.5zM16.5 11.5c.343.343.343.899 0 1.242a.5.5 0 010-.707c.343-.343.343.899 0-1.242a.5.5 0 01-.707.707c.343.343.343.899 0 1.242a.5.5 0 01.707-.707zM17.5 13a.5.5 0 01-.5-.5v-.5a.5.5 0 011 0v.5a.5.5 0 01-.5.5zM11.5 17c.343.343.343.899 0 1.242a.5.5 0 010-.707c.343-.343.343.899 0-1.242a.5.5 0 01-.707.707c.343.343.343.899 0 1.242a.5.5 0 01.707-.707zM10.5 18a.5.5 0 01-.5-.5v-.5a.5.5 0 011 0v.5a.5.5 0 01-.5.5zM8.5 19.5a.5.5 0 01-.5-.5v-.5a.5.5 0 011 0v.5a.5.5 0 01-.5.5zM6.5 20a.5.5 0 01-.5-.5v-.5a.5.5 0 011 0v.5a.5.5 0 01-.5.5zM4.5 19.5a.5.5 0 01-.5-.5v-.5a.5.5 0 011 0v.5a.5.5 0 01-.5.5zM2.5 18a.5.5 0 01-.5-.5v-.5a.5.5 0 011 0v.5a.5.5 0 01-.5.5zM1.5 17c.343.343.343.899 0 1.242a.5.5 0 010-.707c.343-.343.343.899 0-1.242a.5.5 0 01-.707.707c.343.343.343.899 0 1.242a.5.5 0 01.707-.707z" fill="#00DFD8"/>"""
+hike_icon = """<path d="M12 1.5a.5.5 0 01.5-.5h2a.5.5 0 010 1h-2a.5.5 0 01-.5-.5zM10.5 1.5a.5.5 0 01.5-.5h1.5a.5.5 0 010 1h-1.5a.5.5 0 01-.5-.5zM17.5 4c.343.343.343.899 0 1.242a.5.5 0 010-.707c.343-.343.343-.899 0-1.242a.5.5 0 01-.707.707c.343.343.343.899 0 1.242a.5.5 0 01.707-.707zM16.5 5a.5.5 0 01-.5-.5v-.5a.5.5 0 011 0v.5a.5.5 0 01-.5.5zM14.5 7a.5.5 0 01-.5-.5v-1a.5.5 0 011 0v1a.5.5 0 01-.5.5zM12.5 11.5c.343.343.343.899 0 1.242a.5.5 0 010-.707c.343-.343.343-.899 0-1.242a.5.5 0 01-.707.707c.343.343.343.899 0 1.242a.5.5 0 01.707-.707zM11.5 13a.5.5 0 01-.5-.5v-.5a.5.5 0 011 0v.5a.5.5 0 01-.5.5z" fill="#FFC300"/>"""
+walk_icon = """<path d="M12.5 21.5l-2.001-2.001V14.5l2.001-2.001v-1l1 1-1-1 1-1L12.5 21.5zm.5 1l-1-1 1-1 1 1-1 1z" fill="#A855F7"/>"""
+heart_icon = """<path d="M12.5 21.5a5.501 5.501 0 005.5-5.5 5.501 5.501 0 00-5.5-5.5 5.501 5.501 0 00-5.5 5.5 5.501 5.501 0 005.5 5.5z M13 18a.5.5 0 01-.5-.5V16a.5.5 0 011 0v1.5a.5.5 0 01-.5.5z" fill="#f0f0f0"/>"""
+elev_icon = """<path d="M12.5 1.5a.5.5 0 01.5-.5h2a.5.5 0 010 1h-2a.5.5 0 01-.5-.5zM10.5 1.5a.5.5 0 01.5-.5h1.5a.5.5 0 010 1h-1.5a.5.5 0 01-.5-.5zM18.5 4c.343.343.343.899 0 1.242a.5.5 0 010-.707c.343-.343.343-.899 0-1.242a.5.5 0 01-.707.707c.343.343.343.899 0 1.242a.5.5 0 01.707-.707zM17.5 5a.5.5 0 01-.5-.5v-.5a.5.5 0 011 0v.5a.5.5 0 01-.5.5z" fill="#f0f0f0"/>"""
+
+# 安全构建统计块
+stats_block = (
+    f'<g id="stats_block" transform="translate({width_px/2:.1f}, {stats_y_pos:.1f})" text-anchor="middle" fill="#f0f0f0" font-family="Arial, Helvetica, sans-serif">\n'
+    f'  <g id="stats_items_grid" transform="translate(0, 0)" font-size="20">\n'
+    f'    <g transform="translate(-180, 0)"><g transform="translate(-30, 0)"> {run_icon} </g><text transform="translate(30, 20)" text-anchor="start">{run_text}</text></g>\n'
+    f'    <g transform="translate(180, 0)"><g transform="translate(-30, 0)"> {ride_icon} </g><text transform="translate(30, 20)" text-anchor="start">{ride_text}</text></g>\n'
+    f'    <g transform="translate(-180, 50)"><g transform="translate(-30, 0)"> {hike_icon} </g><text transform="translate(30, 20)" text-anchor="start">{hike_text}</text></g>\n'
+    f'    <g transform="translate(180, 50)"><g transform="translate(-30, 0)"> {walk_icon} </g><text transform="translate(30, 20)" text-anchor="start">{walk_text}</text></g>\n'
+    f'    <g transform="translate(-120, 100)"><g transform="translate(-30, 0)"> {heart_icon} </g><text transform="translate(30, 20)" text-anchor="start">{hr_text}</text></g>\n'
+    f'    <g transform="translate(120, 100)"><g transform="translate(-30, 0)"> {elev_icon} </g><text transform="translate(30, 20)" text-anchor="start">{elev_text}</text></g>\n'
+    f'  </g>\n'
+    f'  <g id="total_summary" transform="translate(0, 160)" font-size="24" font-weight="bold">\n'
+    f'    <g transform="translate(-160, 0)"><g transform="translate(-30, 0)"> {sigma_icon} </g><text transform="translate(30, 20)" text-anchor="start">{total_text}</text></g>\n'
+    f'  </g>\n'
+    f'</g>\n'
+)
+
+if "</svg>" in svg_content:
+    svg_content = svg_content.replace("</svg>", "\n".join(svg_injection_lines) + "\n" + stats_block + "\n</svg>")
+
+final_path = "colorful-map.svg"
+with open(final_path, 'w', encoding='utf-8') as f:
+    f.write(svg_content)
+
+print(f"\n大功告成！海报已生成：{final_path}")
