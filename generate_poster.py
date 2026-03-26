@@ -67,7 +67,7 @@ result = generate_poster(
         formats=("svg",), 
         lat=args.lat,  
         lon=args.lon, 
-        title="",        # 强制置空，由后续代码接管排版
+        title="",        
         subtitle="",     
         theme="dark",   
         width_cm=21,
@@ -177,9 +177,7 @@ svg_injection_lines.append('</g>')
 with open(result.files[0], 'r', encoding='utf-8') as f:
     svg_content = f.read()
 
-# ==========================================
-# 💥 1. 强制灰度化：将底层所有的黄/棕色道路全部转为深灰色 💥
-# ==========================================
+# 强制灰度化底层所有带有黄/棕色的地图线条
 def color_to_gray(match):
     val = match.group(1)
     try:
@@ -187,7 +185,6 @@ def color_to_gray(match):
             r, g, b = int(val[0], 16)*17, int(val[1], 16)*17, int(val[2], 16)*17
         else:
             r, g, b = int(val[0:2], 16), int(val[2:4], 16), int(val[4:6], 16)
-        # 计算亮度，并微微压暗 (0.7) 保证其作为背景的静谧感
         lum = int((0.299 * r + 0.587 * g + 0.114 * b) * 0.7)
         return f'#{lum:02x}{lum:02x}{lum:02x}'
     except:
@@ -201,27 +198,26 @@ def rgb_to_gray(match):
     except:
         return match.group(0)
 
-# 正则替换底层里的所有色值
 svg_content = re.sub(r'#([a-fA-F0-9]{6}|[a-fA-F0-9]{3})\b', color_to_gray, svg_content)
 svg_content = re.sub(r'rgb\((\d+),\s*(\d+),\s*(\d+)\)', rgb_to_gray, svg_content)
 
-# ==========================================
-# 💥 2. 彻底净化底层：一键抹除所有原生文字和线条 💥
-# ==========================================
+# 净化底层：一键抹除原生文字和线条
 svg_content = re.sub(r'<text\b.*?</text>', '', svg_content, flags=re.IGNORECASE | re.DOTALL)
 svg_content = re.sub(r'<line\b.*?>', '', svg_content, flags=re.IGNORECASE | re.DOTALL)
 
 # ==========================================
-# 💥 3. 构建自定义图层序列 💥
+# 💥 全新排版：居中大标题 + 竖线分割看板 💥
 # ==========================================
-# 3.1 暗黑玻璃滤镜
+# 滤镜层
 dark_glass = '<rect width="100%" height="100%" fill="#050505" opacity="0.5" />\n'
 
-# 3.2 绝对定位的城市标题 (左上角留白)
-city_title_block = f'<text x="{width_px * 0.08:.1f}" y="{height_px * 0.08:.1f}" font-family="Arial, Helvetica, sans-serif" font-size="{width_px * 0.05:.1f}" font-weight="bold" fill="#f0f0f0" letter-spacing="8">{args.city.upper()}</text>\n'
+# 整体下移至 0.82 比例 (越接近1越靠下)
+stats_y_pos = height_px * 0.82
 
-# 3.3 数据大看板 (无图标、1.5倍大字号、精简间距、强制保留空格)
-stats_y_pos = height_px * 0.78
+# 绝对定位的城市标题 (居中并在数据看板正上方)
+city_title_block = f'<text x="{width_px / 2:.1f}" y="{stats_y_pos - 120:.1f}" font-family="Arial, Helvetica, sans-serif" font-size="{width_px * 0.045:.1f}" font-weight="bold" fill="#f0f0f0" letter-spacing="16" text-anchor="middle" opacity="0.9">{args.city.upper()}</text>\n'
+
+# 数据大看板 (增加半透明竖线分割，整体下沉)
 stats_block = (
     f'<g id="stats_block" transform="translate({width_px/2:.1f}, {stats_y_pos:.1f})" fill="#f0f0f0" font-family="Arial, Helvetica, sans-serif" font-size="60" text-anchor="middle">\n'
     
@@ -233,12 +229,18 @@ stats_block = (
     f'    </text>\n'
     f'  </g>\n'
 
+    # 分割线 1
+    f'  <line x1="-190" y1="-20" x2="-190" y2="90" stroke="#f0f0f0" stroke-width="4" opacity="0.25" stroke-linecap="round" />\n'
+
     f'  <g transform="translate(0, 0)">\n'
     f'    <text>\n'
     f'      <tspan font-weight="bold">{ride_count}</tspan><tspan xml:space="preserve"> Rides</tspan>\n'
     f'      <tspan x="0" dy="80" font-weight="bold">{ride_dist_km:.1f}</tspan><tspan xml:space="preserve"> km</tspan>\n'
     f'    </text>\n'
     f'  </g>\n'
+
+    # 分割线 2
+    f'  <line x1="190" y1="-20" x2="190" y2="90" stroke="#f0f0f0" stroke-width="4" opacity="0.25" stroke-linecap="round" />\n'
 
     f'  <g transform="translate(380, 0)">\n'
     f'    <text>\n'
@@ -254,6 +256,9 @@ stats_block = (
     f'      <tspan x="0" dy="65" font-size="45" opacity="0.9">Avg Heart Rate</tspan>\n'
     f'    </text>\n'
     f'  </g>\n'
+
+    # 分割线 3
+    f'  <line x1="0" y1="180" x2="0" y2="275" stroke="#f0f0f0" stroke-width="4" opacity="0.25" stroke-linecap="round" />\n'
 
     f'  <g transform="translate(190, 200)">\n'
     f'    <text>\n'
@@ -271,7 +276,6 @@ stats_block = (
     f'</g>\n'
 )
 
-# 组合所有新图层并一次性注入 SVG (注意：我们的高亮元素都在最顶层，不会被灰度化)
 final_injection = [
     dark_glass,
     "\n".join(svg_injection_lines),
