@@ -3,20 +3,20 @@ name: Workouts Poster Generator
 on:
   workflow_dispatch:
     inputs:
-      lat:
-        description: '中心点纬度 (例如: 35.30500318)'
-        required: true
-        default: '35.30500318'
       lon:
-        description: '中心点经度 (例如: 113.93085256)'
+        description: '中心点经度'
         required: true
         default: '113.93085256'
+      lat:
+        description: '中心点纬度'
+        required: true
+        default: '35.30500318'
       distance:
-        description: '距离(米) (例如: 18000)'
+        description: '距离(米)'
         required: true
         default: '18000'
       city:
-        description: '城市名称 (例如: 新乡市)'
+        description: '城市名称'
         required: true
         default: '新乡市'
 
