@@ -1,4 +1,4 @@
-name: 生成运动轨迹地图 (Cloud Generator)
+name: Workouts Poster Generator
 
 on:
   workflow_dispatch:
