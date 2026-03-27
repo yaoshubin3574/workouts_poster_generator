@@ -109,9 +109,8 @@ with duckdb.connect() as conn:
         fallback_rows = conn.execute(fallback_sql).fetchall()
         raw_rows = [(str(r[0]), str(r[1]), 0.0, 0.0, 0.0, 0.0) for r in fallback_rows]
 
-print("步骤 3/3：注入矢量轨迹与排版调整...")
+print("步骤 3/3：注入矢量轨迹与终极极简自适应排版...")
 
-# 轨迹颜色保持不变，它们在白色背景下同样鲜艳
 color_map = {
     'Run': '#FC4C02', 'Cycling': '#00DFD8', 'Ride': '#00DFD8',
     'Hike': '#FFC300', 'Walk': '#A855F7'
@@ -176,43 +175,92 @@ with open(result.files[0], 'r', encoding='utf-8') as f:
     svg_content = f.read()
 
 # ==========================================
-# 💥 2. 移除旧的强制灰色滤镜逻辑 💥
-# (因为白色背景下我们不需要把背景色转成道路色)
+# 💥 2. 色彩反转扁平化：统一道路建筑为深灰色，背景为白色 💥
 # ==========================================
+def color_to_gray(match):
+    val = match.group(1)
+    try:
+        if len(val) == 3:
+            r, g, b = int(val[0], 16)*17, int(val[1], 16)*17, int(val[2], 16)*17
+        else:
+            r, g, b = int(val[0:2], 16), int(val[2:4], 16), int(val[4:6], 16)
+        lum = 0.299 * r + 0.587 * g + 0.114 * b
+        
+        # 定义新的前景和背景颜色
+        map_color_gray = "#555555" # 💥 深灰色用于地图元素 (比以前稍微浅点，更清晰) 💥
+        background_color = "#ffffff" # 💥 纯白色用于背景 💥
 
-# 彻底移除原生的渐变遮罩定义和 Mask 属性
+        # 检测亮度。只要不是纯黑背景，全部判定为地图元素，并统一赋值深灰色。
+        # 同时确保公路统一逻辑已保留。
+        if lum < 25:
+            # 这里的逻辑需要根据 theme="light" 生成的SVG进行调整。
+            # 通常 theme="light" 生成的背景是亮色，所以我们应该替换较低亮度的元素。
+            # 先前的逻辑反转一下：如果亮度低于某个值（可能是以前的暗色元素），替换为深灰。
+            # 或者更稳健的方法：保留扁平化逻辑，只需反转替换。
+            
+            # 💥 反转先前的逻辑 💥
+            # 亮度小于230（道路建筑）变为灰色，亮度高的（白色背景）保持白色。
+            if lum > 230:
+                return background_color
+            else:
+                return map_color_gray
+        else:
+            # 💥 处理非黑背景情况 (如果有的话) 💥
+            if lum > 230:
+                return background_color
+            else:
+                return map_color_gray
+    except:
+        return f'#{val}'
+
+def rgb_to_gray(match):
+    try:
+        r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        lum = 0.299 * r + 0.587 * g + 0.114 * b
+        
+        map_color_gray = "#555555"
+        background_color = "#ffffff"
+
+        if lum > 230:
+            return background_color
+        else:
+            return map_color_gray
+    except:
+        return match.group(0)
+
+svg_content = re.sub(r'#([a-fA-F0-9]{6}|[a-fA-F0-9]{3})\b', color_to_gray, svg_content)
+svg_content = re.sub(r'rgb\((\d+),\s*(\d+),\s*(\d+)\)', rgb_to_gray, svg_content)
+
+# ==========================================
+# 💥 3. 彻底物理移除原生遮罩定义 💥
+# ==========================================
 svg_content = re.sub(r'<defs>.*?</defs>', '', svg_content, flags=re.IGNORECASE | re.DOTALL)
 svg_content = re.sub(r'\s*mask="[^"]+"', '', svg_content, flags=re.IGNORECASE)
 
-# 一键抹除所有原生文字和线条
+# 净化底层：一键抹除原生文字和线条
 svg_content = re.sub(r'<text\b.*?</text>', '', svg_content, flags=re.IGNORECASE | re.DOTALL)
 svg_content = re.sub(r'<line\b.*?>', '', svg_content, flags=re.IGNORECASE | re.DOTALL)
 
 
 # ==========================================
-# 💥 3. 更新排版与前景颜色 (转为深色以便在白底显示) 💥
+# 💥 4. 终极自适应流式排版：文本改为黑色，保留所有单位单词单空格 💥
 # ==========================================
-# 定义新的前景颜色 (深灰色，例如 #2a2a2a)
-text_color_fg = "#2a2a2a"
-
 city_y_pos = height_px * 0.85       
 stats_y_pos = height_px * 0.885     
-
 row2_y = height_px * 0.027          
 row3_y = height_px * 0.053          
 
 f_large = width_px * 0.022          
 f_small = width_px * 0.018          
 
-# 渲染城市标题 (使用新的 text_color_fg)
+# 💥 城市名样式 (颜色改为黑色) 💥
 city_letter_spacing = f"{width_px * 0.045:.1f}"
-city_title_block = f'<text x="{width_px / 2:.1f}" y="{city_y_pos:.1f}" font-family="Arial, Helvetica, sans-serif" font-size="{width_px * 0.06:.1f}" font-weight="bold" fill="{text_color_fg}" xml:space="preserve" letter-spacing="{city_letter_spacing}" text-anchor="middle" opacity="0.9">{args.city.upper()}</text>\n'
+city_title_block = f'<text x="{width_px / 2:.1f}" y="{city_y_pos:.1f}" font-family="Arial, Helvetica, sans-serif" font-size="{width_px * 0.06:.1f}" font-weight="bold" fill="#000000" xml:space="preserve" letter-spacing="{city_letter_spacing}" text-anchor="middle" opacity="0.9">{args.city.upper()}</text>\n'
 
+# 💥 终极自适应排版文本块 (颜色改为黑色，单词间单空格，内联分割线，大加粗数字+小普通单位) 💥
+pipe_str = f'<tspan xml:space="preserve" fill="#000000" opacity="0.25" font-size="{f_large * 1.1:.1f}">   |   </tspan>'
 
-# 💥 构造内联的竖线分隔符 (使用新的 text_color_fg，透明度保持 0.25) 💥
-pipe_str = f'<tspan xml:space="preserve" fill="{text_color_fg}" opacity="0.25" font-size="{f_large * 1.1:.1f}">   |   </tspan>'
-
-# 💥 第一行：Runs, Rides, Hikes 💥
+# 第一行： Runs / Rides / Hikes (颜色黑色，格式：大加粗数字 + 小普通单位，单词前单空格，内联分割线)
 row1_text = (
     f'<tspan font-weight="bold" font-size="{f_large:.1f}">{run_count}</tspan><tspan xml:space="preserve"> Runs </tspan>'
     f'<tspan font-weight="bold" font-size="{f_large:.1f}">{run_dist_km:.1f}</tspan><tspan xml:space="preserve"> km</tspan>'
@@ -224,14 +272,14 @@ row1_text = (
     f'<tspan font-weight="bold" font-size="{f_large:.1f}">{hike_dist_km:.1f}</tspan><tspan xml:space="preserve"> km</tspan>'
 )
 
-# 💥 第二行：心率与海拔 💥
+# 第二行： BPM / Elevation (颜色黑色)
 row2_text = (
     f'<tspan font-weight="bold" font-size="{f_large:.1f}">{int(total_avg_hr)}</tspan><tspan xml:space="preserve"> BPM Avg Heart Rate</tspan>'
     f'{pipe_str}'
     f'<tspan font-weight="bold" font-size="{f_large:.1f}">{int(total_elev_g)}</tspan><tspan xml:space="preserve"> m Elevation Gain</tspan>'
 )
 
-# 💥 第三行：总计 💥
+# 第三行： Total (颜色黑色)
 row3_text = (
     f'<tspan font-weight="bold" font-size="{f_large:.1f}">{total_count}</tspan><tspan xml:space="preserve"> Workouts Total </tspan>'
     f'<tspan font-weight="bold" font-size="{f_large:.1f}">{total_dist_km:.1f}</tspan><tspan xml:space="preserve"> km / </tspan>'
@@ -239,9 +287,9 @@ row3_text = (
     f'<tspan font-weight="bold" font-size="{f_large:.1f}">{total_time_m}</tspan><tspan xml:space="preserve"> min</tspan>'
 )
 
-# 将三行文本组合成块 (使用 text_color_fg)
+# 将三行文本组合成一个完美的流式居中块 (fill="black")
 stats_block = (
-    f'<g id="stats_block" transform="translate({width_px/2:.1f}, {stats_y_pos:.1f})" fill="{text_color_fg}" font-family="Arial, Helvetica, sans-serif" font-size="{f_small:.1f}" text-anchor="middle">\n'
+    f'<g id="stats_block" transform="translate({width_px/2:.1f}, {stats_y_pos:.1f})" fill="#000000" font-family="Arial, Helvetica, sans-serif" font-size="{f_small:.1f}" text-anchor="middle">\n'
     f'  <text transform="translate(0, 0)">{row1_text}</text>\n'
     f'  <text transform="translate(0, {row2_y:.1f})">{row2_text}</text>\n'
     f'  <text transform="translate(0, {row3_y:.1f})">{row3_text}</text>\n'
