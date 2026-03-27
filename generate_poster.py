@@ -173,7 +173,7 @@ svg_injection_lines.append('</g>')
 with open(result.files[0], 'r', encoding='utf-8') as f:
     svg_content = f.read()
 
-# 强制灰度化底层黄/棕色道路
+# 💥 核心提亮 1：强制灰度化底层，但提升亮度系数 (从 0.7 提升到 1.2) 💥
 def color_to_gray(match):
     val = match.group(1)
     try:
@@ -181,7 +181,7 @@ def color_to_gray(match):
             r, g, b = int(val[0], 16)*17, int(val[1], 16)*17, int(val[2], 16)*17
         else:
             r, g, b = int(val[0:2], 16), int(val[2:4], 16), int(val[4:6], 16)
-        lum = int((0.299 * r + 0.587 * g + 0.114 * b) * 0.7)
+        lum = min(255, int((0.299 * r + 0.587 * g + 0.114 * b) * 1.2))
         return f'#{lum:02x}{lum:02x}{lum:02x}'
     except:
         return f'#{val}'
@@ -189,7 +189,7 @@ def color_to_gray(match):
 def rgb_to_gray(match):
     try:
         r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
-        lum = int((0.299 * r + 0.587 * g + 0.114 * b) * 0.7)
+        lum = min(255, int((0.299 * r + 0.587 * g + 0.114 * b) * 1.2))
         return f'rgb({lum},{lum},{lum})'
     except:
         return match.group(0)
@@ -202,34 +202,30 @@ svg_content = re.sub(r'<text\b.*?</text>', '', svg_content, flags=re.IGNORECASE 
 svg_content = re.sub(r'<line\b.*?>', '', svg_content, flags=re.IGNORECASE | re.DOTALL)
 
 # ==========================================
-# 💥 极简美学自适应排版 (所有间距变为 2/3) 💥
+# 极简美学自适应排版 
 # ==========================================
-dark_glass = '<rect width="100%" height="100%" fill="#050505" opacity="0.5" />\n'
 
-# 3. 下侧页边距缩小到现在的 2/3 (整体下移到 88.5%)
-city_y_pos = height_px * 0.85       # 地名原为 0.78
-stats_y_pos = height_px * 0.885     # 看板原为 0.83 (到底部距离从 17% 缩为 11.5%)
+# 💥 核心提亮 2：削弱暗黑滤镜的透明度 (从 0.5 降低到 0.35) 💥
+dark_glass = '<rect width="100%" height="100%" fill="#050505" opacity="0.35" />\n'
 
-# 2. 数据每行间距缩小到现在的 2/3
-row2_y = height_px * 0.027          # 第二行向下偏移 (原为 0.04)
-row3_y = height_px * 0.053          # 第三行向下偏移 (原为 0.08)
+city_y_pos = height_px * 0.85       
+stats_y_pos = height_px * 0.885     
 
-# 1. 每组数据间的横向间距缩小到现在的 2/3
-f_large = width_px * 0.022          # 字体大小保持不变
+row2_y = height_px * 0.027          
+row3_y = height_px * 0.053          
+
+f_large = width_px * 0.022          
 f_small = width_px * 0.018          
-col3_gap = width_px * 0.226         # 第一排三列间距 (原为 0.34)
-col2_gap = width_px * 0.113         # 第二排两列间距 (原为 0.17)
-line3_gap = width_px * 0.113        # 竖线对齐位置 (原为 0.17)
+col3_gap = width_px * 0.226         
+col2_gap = width_px * 0.113         
+line3_gap = width_px * 0.113        
 
-# 渲染城市标题
 city_letter_spacing = f"{width_px * 0.045:.1f}"
 city_title_block = f'<text x="{width_px / 2:.1f}" y="{city_y_pos:.1f}" font-family="Arial, Helvetica, sans-serif" font-size="{width_px * 0.06:.1f}" font-weight="bold" fill="#f0f0f0" xml:space="preserve" letter-spacing="{city_letter_spacing}" text-anchor="middle" opacity="0.9">{args.city.upper()}</text>\n'
 
-# 渲染极简压缩数据看板 (竖线长度也按比例缩短，完美适配缩小后的行距)
 stats_block = (
     f'<g id="stats_block" transform="translate({width_px/2:.1f}, {stats_y_pos:.1f})" fill="#f0f0f0" font-family="Arial, Helvetica, sans-serif" font-size="{f_small:.1f}" text-anchor="middle">\n'
     
-    # --- 第一行: Runs, Rides, Hikes ---
     f'  <g transform="translate(-{col3_gap:.1f}, 0)">\n'
     f'    <text>\n'
     f'      <tspan font-weight="bold" font-size="{f_large:.1f}">{run_count}</tspan><tspan xml:space="preserve"> Runs   </tspan>\n'
@@ -237,7 +233,6 @@ stats_block = (
     f'    </text>\n'
     f'  </g>\n'
 
-    # 分割线 1
     f'  <line x1="-{line3_gap:.1f}" y1="-{width_px * 0.012:.1f}" x2="-{line3_gap:.1f}" y2="{width_px * 0.003:.1f}" stroke="#f0f0f0" stroke-width="3" opacity="0.25" stroke-linecap="round" />\n'
 
     f'  <g transform="translate(0, 0)">\n'
@@ -247,7 +242,6 @@ stats_block = (
     f'    </text>\n'
     f'  </g>\n'
 
-    # 分割线 2
     f'  <line x1="{line3_gap:.1f}" y1="-{width_px * 0.012:.1f}" x2="{line3_gap:.1f}" y2="{width_px * 0.003:.1f}" stroke="#f0f0f0" stroke-width="3" opacity="0.25" stroke-linecap="round" />\n'
 
     f'  <g transform="translate({col3_gap:.1f}, 0)">\n'
@@ -257,7 +251,6 @@ stats_block = (
     f'    </text>\n'
     f'  </g>\n'
 
-    # --- 第二行: BPM, Elev ---
     f'  <g transform="translate(-{col2_gap:.1f}, {row2_y:.1f})">\n'
     f'    <text>\n'
     f'      <tspan font-weight="bold" font-size="{f_large:.1f}">{int(total_avg_hr)}</tspan><tspan xml:space="preserve"> BPM   </tspan>\n'
@@ -265,7 +258,6 @@ stats_block = (
     f'    </text>\n'
     f'  </g>\n'
 
-    # 分割线 3
     f'  <line x1="0" y1="{row2_y - width_px * 0.010:.1f}" x2="0" y2="{row2_y + width_px * 0.005:.1f}" stroke="#f0f0f0" stroke-width="3" opacity="0.25" stroke-linecap="round" />\n'
 
     f'  <g transform="translate({col2_gap:.1f}, {row2_y:.1f})">\n'
@@ -275,7 +267,6 @@ stats_block = (
     f'    </text>\n'
     f'  </g>\n'
 
-    # --- 第三行: Total 汇总 ---
     f'  <g transform="translate(0, {row3_y:.1f})">\n'
     f'    <text>\n'
     f'      <tspan font-weight="bold" font-size="{f_large:.1f}">{total_count}</tspan><tspan xml:space="preserve"> Workouts Total </tspan><tspan font-weight="bold" font-size="{f_large:.1f}">{total_dist_km:.1f}</tspan><tspan xml:space="preserve"> km / </tspan><tspan font-weight="bold" font-size="{f_large:.1f}">{total_time_h}</tspan><tspan xml:space="preserve"> h </tspan><tspan font-weight="bold" font-size="{f_large:.1f}">{total_time_m}</tspan><tspan xml:space="preserve"> min</tspan>\n'
