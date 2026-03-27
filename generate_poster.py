@@ -173,7 +173,9 @@ svg_injection_lines.append('</g>')
 with open(result.files[0], 'r', encoding='utf-8') as f:
     svg_content = f.read()
 
-# 💥 核心提亮 1：强制灰度化底层，但提升亮度系数 (从 0.7 提升到 1.2) 💥
+# ==========================================
+# 💥 1. 色彩扁平化 (统一高等级公路、普通道路与建筑) 💥
+# ==========================================
 def color_to_gray(match):
     val = match.group(1)
     try:
@@ -181,33 +183,45 @@ def color_to_gray(match):
             r, g, b = int(val[0], 16)*17, int(val[1], 16)*17, int(val[2], 16)*17
         else:
             r, g, b = int(val[0:2], 16), int(val[2:4], 16), int(val[4:6], 16)
-        lum = min(255, int((0.299 * r + 0.587 * g + 0.114 * b) * 1.2))
-        return f'#{lum:02x}{lum:02x}{lum:02x}'
+        lum = 0.299 * r + 0.587 * g + 0.114 * b
+        
+        # 只要亮度大于某个极低值，全部强行判定为道路/建筑，并统一赋值相同的深灰色
+        if lum < 25:
+            return '#080808'  # 无边框极致深黑背景
+        else:
+            return '#2a2a2a'  # 统一的低调深灰道路
     except:
         return f'#{val}'
 
 def rgb_to_gray(match):
     try:
         r, g, b = int(match.group(1)), int(match.group(2)), int(match.group(3))
-        lum = min(255, int((0.299 * r + 0.587 * g + 0.114 * b) * 1.2))
-        return f'rgb({lum},{lum},{lum})'
+        lum = 0.299 * r + 0.587 * g + 0.114 * b
+        if lum < 25:
+            return '#080808'
+        else:
+            return '#2a2a2a'
     except:
         return match.group(0)
 
 svg_content = re.sub(r'#([a-fA-F0-9]{6}|[a-fA-F0-9]{3})\b', color_to_gray, svg_content)
 svg_content = re.sub(r'rgb\((\d+),\s*(\d+),\s*(\d+)\)', rgb_to_gray, svg_content)
 
-# 净化底层
+# ==========================================
+# 💥 2. 物理毁灭遮罩与无用图层 💥
+# ==========================================
+# 彻底移除原生的渐变遮罩定义和 Mask 属性
+svg_content = re.sub(r'<defs>.*?</defs>', '', svg_content, flags=re.IGNORECASE | re.DOTALL)
+svg_content = re.sub(r'\s*mask="[^"]+"', '', svg_content, flags=re.IGNORECASE)
+
+# 一键抹除所有原生文字和线条
 svg_content = re.sub(r'<text\b.*?</text>', '', svg_content, flags=re.IGNORECASE | re.DOTALL)
 svg_content = re.sub(r'<line\b.*?>', '', svg_content, flags=re.IGNORECASE | re.DOTALL)
 
-# ==========================================
-# 极简美学自适应排版 
-# ==========================================
 
-# 💥 核心提亮 2：削弱暗黑滤镜的透明度 (从 0.5 降低到 0.35) 💥
-dark_glass = '<rect width="100%" height="100%" fill="#050505" opacity="0.35" />\n'
-
+# ==========================================
+# 3. 极简美学自适应排版 (保留之前完美比例)
+# ==========================================
 city_y_pos = height_px * 0.85       
 stats_y_pos = height_px * 0.885     
 
@@ -275,8 +289,8 @@ stats_block = (
     f'</g>\n'
 )
 
+# 💥 这里去掉了 dark_glass，因为背景已经变成了纯色 #080808，不再需要额外的滤镜压暗了！💥
 final_injection = [
-    dark_glass,
     "\n".join(svg_injection_lines),
     city_title_block,
     stats_block
