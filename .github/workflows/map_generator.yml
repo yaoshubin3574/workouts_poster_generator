@@ -14,7 +14,7 @@ on:
       distance:
         description: '距离(米)'
         required: true
-        default: '20000'
+        default: '10000'
       city:
         description: '城市名称'
         required: true
